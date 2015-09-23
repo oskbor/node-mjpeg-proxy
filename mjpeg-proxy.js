@@ -19,8 +19,6 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-var url = require('url');
-var http = require('http');
 
 var buffertools = require('buffertools');
 
@@ -36,12 +34,12 @@ function extractBoundary(contentType) {
   return contentType.substring(startIndex + 9, endIndex).replace(/"/gi,'').replace(/^\-\-/gi, '');
 }
 
-var MjpegProxy = exports.MjpegProxy = function(mjpegUrl) {
+var MjpegProxy = function(proxy, mjpegUrl) {
   var self = this;
 
-  if (!mjpegUrl) throw new Error('Please provide a source MJPEG URL');
-
-  self.mjpegOptions = url.parse(mjpegUrl);
+  if (!mjpegUrl) {
+    throw new Error('Please provide a source MJPEG URL');
+  }
 
   self.audienceResponses = [];
   self.newAudienceResponses = [];
@@ -56,8 +54,10 @@ var MjpegProxy = exports.MjpegProxy = function(mjpegUrl) {
       self._newClient(req, res);
     } else {
       // Send source MJPEG request
-      var mjpegRequest = http.request(self.mjpegOptions, function(mjpegResponse) {
-        // console.log('request');
+      console.log('options', self.mjpegOptions);
+      var mjpegRequest = proxy(mjpegUrl);
+       mjpegRequest.on('response',function(mjpegResponse) {
+
         self.globalMjpegResponse = mjpegResponse;
         self.boundary = extractBoundary(mjpegResponse.headers['content-type']);
 
@@ -68,11 +68,11 @@ var MjpegProxy = exports.MjpegProxy = function(mjpegUrl) {
 
         mjpegResponse.on('data', function(chunk) {
           // Fix CRLF issue on iOS 6+: boundary should be preceded by CRLF.
-          if (lastByte1 != null && lastByte2 != null) {
+          if (lastByte1 !== null && lastByte2 !== null) {
             var oldheader = '--' + self.boundary;
             var p = buffertools.indexOf(chunk, oldheader);
 
-            if (p == 0 && !(lastByte2 == 0x0d && lastByte1 == 0x0a) || p > 1 && !(chunk[p - 2] == 0x0d && chunk[p - 1] == 0x0a)) {
+            if (p === 0 && !(lastByte2 == 0x0d && lastByte1 == 0x0a) || p > 1 && !(chunk[p - 2] == 0x0d && chunk[p - 1] == 0x0a)) {
               var b1 = chunk.slice(0, p);
               var b2 = new Buffer('\r\n--' + self.boundary);
               var b3 = chunk.slice(p + oldheader.length);
@@ -88,9 +88,9 @@ var MjpegProxy = exports.MjpegProxy = function(mjpegUrl) {
 
             // First time we push data... lets start at a boundary
             if (self.newAudienceResponses.indexOf(res) >= 0) {
-              var p = buffertools.indexOf(chunk, '--' + self.boundary);
-              if (p >= 0) {
-                res.write(chunk.slice(p));
+              var p2 = buffertools.indexOf(chunk, '--' + self.boundary);
+              if (p2 >= 0) {
+                res.write(chunk.slice(p2));
                 self.newAudienceResponses.splice(self.newAudienceResponses.indexOf(res), 1); // remove from new
               }
             } else {
@@ -115,7 +115,7 @@ var MjpegProxy = exports.MjpegProxy = function(mjpegUrl) {
       });
       mjpegRequest.end();
     }
-  }
+  };
 
   self._newClient = function(req, res) {
     res.writeHead(200, {
@@ -136,9 +136,9 @@ var MjpegProxy = exports.MjpegProxy = function(mjpegUrl) {
         self.newAudienceResponses.splice(self.newAudienceResponses.indexOf(res), 1); // remove from new
       }
 
-      if (self.audienceResponses.length == 0) {
+      if (self.audienceResponses.length === 0) {
         self.globalMjpegResponse.destroy();
       }
     });
-  }
-}
+  };
+};
