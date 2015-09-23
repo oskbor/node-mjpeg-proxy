@@ -34,7 +34,7 @@ function extractBoundary(contentType) {
   return contentType.substring(startIndex + 9, endIndex).replace(/"/gi,'').replace(/^\-\-/gi, '');
 }
 
-var MjpegProxy = function(proxy, mjpegUrl) {
+var MjpegProxy = exports.MjpegProxy = function(proxy, mjpegUrl) {
   var self = this;
 
   if (!mjpegUrl) {
